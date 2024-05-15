@@ -1,6 +1,10 @@
 import random
 import tkinter # Parte del gui
 import customtkinter #Parte del gui
+import pandas as pd
+from pandasgui import show
+from decimal import Decimal
+
 
 def definir_demanda_dia():
     # Mediante un RND define la demanda (decenas vendidas) en el día
@@ -8,12 +12,12 @@ def definir_demanda_dia():
     
     #Probabilidades
     #Deben ser parametrizables
-    pd0 = 0.05  # 0 decenas (se vendieron ese día) 
-    pd10 = 0.12 # 10 decenas
-    pd20 = 0.18 # 20 decenas
-    pd30 = 0.25 # 30 decenas 
-    pd40 = 0.22 # 40 decenas
-    pd50 = 0.18 # 50 decenas
+    pd0 = float(ppd0.get())  # 0 decenas (se vendieron ese día) 
+    pd10 = float(ppd10.get()) # 10 decenas
+    pd20 = float(ppd20.get()) # 20 decenas
+    pd30 = float(ppd30.get()) # 30 decenas 
+    pd40 = float(ppd40.get()) # 40 decenas
+    pd50 = float(ppd50.get()) # 50 decenas
     
     # Probabilidades acumuladas
     pd10acu = pd0+pd10
@@ -35,7 +39,8 @@ def definir_demanda_dia():
             demanda = demanda[i]
             break
         
-    return demanda
+    return demanda , rnd_demanda
+
 
 def definir_demora():
     #Mediante un RND, calcula la demora (en días) del pedido
@@ -43,10 +48,10 @@ def definir_demora():
     #demora_probabilidad_días (demora_probabilidad_día1 = 0.15 = 15%)
     
     # Debe ser parametrizable
-    dp1 = 0.15
-    dp2 = 0.20
-    dp3 = 0.40
-    dp4 = 0.25
+    dp1 = float(ddp1.get())
+    dp2 = float(ddp2.get())
+    dp3 = float(ddp3.get())
+    dp4 = float(ddp4.get())
 
     demora_probabilidad = [dp1, dp2, dp3, dp4]
     dp2acu = dp1+dp2
@@ -63,96 +68,295 @@ def definir_demora():
             demora = lista_demora[i]
             break
         
-    return demora
+    return demora , rnd_demora
+
 
 def definir_costo_pedido(decenas):
     #Le introducis las decenas pedidas y te devuelve el costo del pedido
 
     #Debe ser parametrizable
-    cp1 = 2000
-    cp2 = 2800
-    cp3 = 3000
+    cp1 = float(ccp1.get())
+    cp2 = float(ccp2.get())
+    cp3 = float(ccp3.get())
 
     # Si se piden 100 decenas, se usa costo de pedido 1
     if decenas <= 100:
         return cp1
 
     # Si se piden 101-200 decenas, se usa cp2
-    if 101 < decenas < 200:
+    if (decenas > 100 and decenas <= 200):
         return cp2
     
     # Mas de 200 decenas, se usa cp3
     if decenas > 200:
         return cp3
-    
+
+
 def politica_a():
+    if ultimas.get() == '':
+        xfilas = int(iteraciones.get())
+    else:
+        xfilas = int(ultimas.get())
     
-    si = 20 # Stock Inicial
+    #lista_valores = [["Dia","Rnd_Demora","Demora","Rnd_Demanda","Demanda","KM","KS","Costo_Dia"]]
+    lista_valores = []
+    n = int(iteraciones.get())  # Días simulados
     km = 30 # Costo de mantenimiento/almacenamiento
     ks = 40 # Costo por escasez/ruptura
-    q = int(pedidos.get()) # Tamaño de pedido (DEBE SER PARAMETRIZABLE)
+    q = int(pedidos.get()) # Tamaño de pedido (180)
+    sf = 0
+    llegada_pedido = 0
+    km_dia = 0
+    ks_dia = 0
+    costo_acu = 0
     
     cont_dias = 0
     
+    for i in range(n):
+        
+        # --------------------------------- RESET DE VARIABLES (NUEVO DIA) --------------------------
+        costo_pedido = 0
+        
+        if cont_dias == 0:
+            si = 20 # El primer día, el stock inicial es 20
+        else:
+            si = sf # Stock inicial de ahora va a ser el stock final de la anterior iteración.
+            
+        disponible = 0
+        pedido = "No"
+        rnd_demora = 0
+        demora = 0
+        if llegada_pedido < (cont_dias + 1):
+            llegada_pedido = 0 # Si el pedido ya llegó, se marca en 0 su valor en la tabla
+        
+        # --------------------------------------------------------------------------------------------
+        
+        
+        # --------------- Se evalúa si llegó algún pedido --------------
+        
+        if llegada_pedido == (cont_dias + 1):
+            disponible = q
+            
+        
+        # ------------------------------------------- CÁLCULO DE DEMANDA ----------------------------------------------
+        # Definir cuanta demanda hubo en ese día
+        demanda , rnd_demanda = definir_demanda_dia()
+        
+        
+        # ------------------------------ CÁLCULO DE VENTAS DIARIAS (km, ks y stock final) ----------------------------
+        
+        #Ventas, km y ks, y sf
+        restante = (si + disponible) - demanda  # Stock que quedó disponible
+        if restante >=0:
+            sf = restante  # stock para la próxima iteración
+            km_dia = restante*km
+            ks_dia = 0
+        else:
+            sf = 0 # stock para la próxima iteración
+            ks_dia = abs(restante*ks)  
+            km_dia = 0
+            
+        # -------------------------------------------------------------------------------------------------------------
+        
+        # -------------------------------------- EVALUACION DE PEDIDOS ------------------------------------------------
+        
+        # Se evalúa si hay que hacer un pedido
+        
+        if cont_dias%7 == 0 or cont_dias == 0:  # Si hay que hacer pedido
+            pedido = "Si"
+            demora, rnd_demora = definir_demora()   # Se calcula la demora
+            llegada_pedido = (cont_dias + 1) + demora # Se calcula la próxima llegada de pedido 
+            
+            costo_pedido = definir_costo_pedido(q)  # Se define el costo del pedido
+        
+
+        # ------------------------ CALCULO DE COSTOS DIARIOS ------------------------------------------------
+            
+        costo_dia = ks_dia + km_dia + costo_pedido # El costo del día es el costo de escasez, matenimiento y si hubo pedido
+        costo_acu = costo_acu + costo_dia # Se acumula el costo
+    
+        # ---------------- RESET DE VARIABLES (Final) -------------
+
+        cont_dias +=1
+        
+        # Agregar a la lista los valores del día
+        
+        lista_valores.append([i+1,rnd_demanda,demanda,pedido,rnd_demora,demora,llegada_pedido,disponible,si,sf, costo_pedido, km_dia, ks_dia, costo_dia, costo_acu])
+        
+    # Al finalizar iteraciones, imprimir datos por pantalla
+    print(lista_valores[0])
+    print(len(lista_valores[0][:]))
+    df = pd.DataFrame(data=lista_valores,columns=[["Dia","Rnd_Demanda","Demanda","Pedido","RND_Demora","Demora","Llegada_Pedido","Disponible","Stock Inicial","Stock Final","Costo Pedido", "Km","Ks","Costo Día","Costo Acumulado"]])
+   #df_filtrado = df[(df['Dia'] >= int(desde.get())) & (df['Dia'] <= int(hasta.get()))]
+    
+    if desde.get() == '' or hasta.get() == '':
+        print(df.tail(xfilas))
+        show(df.tail(xfilas))
+    else:
+        d = int(desde.get()) - 1
+        h = int(hasta.get())
+        print(df.iloc[d:h])
+        show(df.iloc[d:h])
+     
+    
+    
+
+
+def politica_b():
+    if ultimas.get() == '':
+        xfilas = int(iteraciones.get())
+    else:
+        xfilas = int(ultimas.get())
+    #lista_valores = [["Dia","Rnd_Demora","Demora","Rnd_Demanda","Demanda","KM","KS","Costo_Dia"]]
+    lista_valores = []
+    n = int(iteraciones.get())  # Días simulados
+    km = 30 # Costo de mantenimiento/almacenamiento
+    ks = 40 # Costo por escasez/ruptura
+    q = int(pedidos_b.get()) # Tamaño de pedido inicial
+    sf = 0
+    llegada_pedido = 0
+    km_dia = 0
+    ks_dia = 0
+    costo_acu = 0
+    acu_demanda = 0
+    
+    cont_dias = 0
     
     for i in range(n):
         
-        if cont_dias%7 == 0 or cont_dias == 0:
-            #Realizar pedido
-            demora = definir_demora()
+        # --------------------------------- RESET DE VARIABLES (NUEVO DIA) --------------------------
+        costo_pedido = 0
+        
+        if cont_dias == 0:
+            si = 20 # El primer día, el stock inicial es 20
+        else:
+            si = sf # Stock inicial de ahora va a ser el stock final de la anterior iteración.
+            
+        disponible = 0
+        pedido = "No"
+        rnd_demora = 0
+        demora = 0
+        if llegada_pedido < (cont_dias + 1):
+            llegada_pedido = 0 # Si el pedido ya llegó, se marca en 0 su valor en la tabla
+        
+        # --------------------------------------------------------------------------------------------
+        
+        
+        # --------------- Se evalúa si llegó algún pedido --------------
+        
+        if llegada_pedido == (cont_dias + 1):
+            disponible = cant_pedida
             
         
-        demanda = definir_demanda_dia()
-        if cont_dias == 0:
-            si = 20
+        # ------------------------------------------- CÁLCULO DE DEMANDA ----------------------------------------------
+        # Definir cuanta demanda hubo en ese día
+        demanda , rnd_demanda = definir_demanda_dia()
         
-        restante = si - demanda
-        if restante >= 0:
-            km_dia = restante*30
+        
+        # ------------------------------ CÁLCULO DE VENTAS DIARIAS (km, ks y stock final) ----------------------------
+        
+        #Ventas, km y ks, y sf
+        restante = (si + disponible) - demanda  # Stock que quedó disponible
+        if restante >=0:
+            sf = restante  # stock para la próxima iteración
+            km_dia = restante*km
+            ks_dia = 0
         else:
-            ks_dia = restante*40
+            sf = 0 # stock para la próxima iteración
+            ks_dia = abs(restante*ks)  
+            km_dia = 0
+            
+        # -------------------------------------------------------------------------------------------------------------
         
-        costo_dia = ks_dia + km_dia + precio_q_dia
+        # -------------------------------------- EVALUACION DE PEDIDOS ------------------------------------------------
+        
+        # Se evalúa si hay que hacer un pedido
+        
+        if cont_dias%10 == 0:  # Si hay que hacer pedido
+            pedido = "Si"
+            demora, rnd_demora = definir_demora()   # Se calcula la demora
+            
+            llegada_pedido = (cont_dias + 1) + demora # Se calcula la próxima llegada de pedido 
+            
+            if cont_dias == 0:
+                costo_pedido = definir_costo_pedido(q)
+                cant_pedida = q
+            else:
+                costo_pedido = definir_costo_pedido(acu_demanda)  # Se define el costo del pedido
+                cant_pedida = acu_demanda
+            
+            # Se resetea el valor de la demanda acumulada de 10 días anteriores (Solo si no es el primer día)
+            if cont_dias != 0:
+                acu_demanda = 0
+
+        # ------------------------ CALCULO DE COSTOS DIARIOS ------------------------------------------------
+            
+        costo_dia = Decimal(ks_dia) + Decimal(km_dia) + Decimal(costo_pedido) # El costo del día es el costo de escasez, matenimiento y si hubo pedido
+        costo_acu = Decimal(costo_acu) + Decimal(costo_dia) # Se acumula el costo
+    
+        # ---------------- RESET DE VARIABLES (Final) -------------
 
         cont_dias +=1
-
+        acu_demanda += demanda # Acumula cantidad de decenas demandadas ( se resetea cuando se hace un pedido)
+        
+        # Agregar a la lista los valores del día
+        
+        lista_valores.append([i+1,rnd_demanda,demanda,pedido,rnd_demora,demora,llegada_pedido,disponible,si,sf, costo_pedido, km_dia, ks_dia, costo_dia, costo_acu])
+        
+    # Al finalizar iteraciones, imprimir datos por pantalla
+    print(lista_valores[0])
+    print(len(lista_valores[0][:]))
+    df = pd.DataFrame(data=lista_valores,columns=[["Dia","Rnd_Demanda","Demanda","Pedido","RND_Demora","Demora","Llegada_Pedido","Disponible","Stock Inicial","Stock Final","Costo Pedido", "Km","Ks","Costo Día","Costo Acumulado"]])
+    
+    if desde.get() == '' or hasta.get() == '':
+        print(df.tail(xfilas))
+        show(df.tail(xfilas))
+    else:
+        d = int(desde.get()) - 1
+        h = int(hasta.get())
+        print(df.iloc[d:h])
+        show(df.iloc[d:h])
+    
+    
 def borrar():
-    tiempo.delete(0,"end")
-    q_filas.delete(0,"end")
-    hora.delete(0,"end")
+    # Borra valores de - tiempo - cantidad de filas - horas - iteraciones
+    desde.delete(0,"end")
+    hasta.delete(0,"end")
     iteraciones.delete(0,"end")
+    ultimas.delete(0,"end")
+
 
 def default():
+    # Setea a los valores de probabilidades por defecto del PDF
+    
     #Elimina valores anteriores
-    pd0.delete(0,"end")
-    pd10.delete(0,"end")
-    pd20.delete(0,"end")
-    pd30.delete(0,"end")
-    pd40.delete(0,"end")
-    pd50.delete(0,"end")
-    dp1.delete(0,"end")
-    dp2.delete(0,"end")
-    dp3.delete(0,"end")
-    dp4.delete(0,"end")
-    cp1.delete(0,"end")
-    cp2.delete(0,"end")
-    cp3.delete(0,"end")
+    ppd0.delete(0,"end")
+    ppd10.delete(0,"end")
+    ppd20.delete(0,"end")
+    ppd30.delete(0,"end")
+    ppd40.delete(0,"end")
+    ppd50.delete(0,"end")
+    ddp1.delete(0,"end")
+    ddp2.delete(0,"end")
+    ddp3.delete(0,"end")
+    ddp4.delete(0,"end")
+    ccp1.delete(0,"end")
+    ccp2.delete(0,"end")
+    ccp3.delete(0,"end")
     #Se insertan los valores por defecto del pdf 
-    pd0.insert(0,0.05)
-    pd10.insert(0,0.12)
-    pd20.insert(0,0.18)
-    pd30.insert(0,0.25)
-    pd40.insert(0,0.22)
-    pd50.insert(0,0.18)
-    dp1.insert(0,0.15)
-    dp2.insert(0,0.20)
-    dp3.insert(0,0.40)
-    dp4.insert(0,0.25)
-    cp1.insert(0,2000)
-    cp2.insert(0,2800)
-    cp3.insert(0,3000)
-
-
+    ppd0.insert(0,0.05)
+    ppd10.insert(0,0.12)
+    ppd20.insert(0,0.18)
+    ppd30.insert(0,0.25)
+    ppd40.insert(0,0.22)
+    ppd50.insert(0,0.18)
+    ddp1.insert(0,0.15)
+    ddp2.insert(0,0.20)
+    ddp3.insert(0,0.40)
+    ddp4.insert(0,0.25)
+    ccp1.insert(0,2000)
+    ccp2.insert(0,2800)
+    ccp3.insert(0,3000)
 
 #GUI
 customtkinter.set_appearance_mode("DARK")
@@ -172,60 +376,64 @@ simu_frame.place(relx=0.5,rely=0.85,anchor=tkinter.CENTER)
 
 #inputs
 
-tiempo = customtkinter.CTkEntry(inputs_frame,width=100,height=40,text_color="red")
-tiempo.place(relx=0.7,rely=0.2,anchor=tkinter.CENTER)
+desde = customtkinter.CTkEntry(inputs_frame,width=100,height=40,text_color="red")
+desde.place(relx=0.7,rely=0.2,anchor=tkinter.CENTER)
 
-q_filas = customtkinter.CTkEntry(inputs_frame,width=100,height=40,text_color="red")
-q_filas.place(relx=0.7,rely=0.35,anchor=tkinter.CENTER)
-
-hora =  customtkinter.CTkEntry(inputs_frame,width=100,height=40,text_color="red")
-hora.place(relx=0.7,rely=0.50,anchor=tkinter.CENTER)
+hasta =  customtkinter.CTkEntry(inputs_frame,width=100,height=40,text_color="red")
+hasta.place(relx=0.7,rely=0.35,anchor=tkinter.CENTER)
 
 iteraciones =  customtkinter.CTkEntry(inputs_frame,width=100,height=40,text_color="red")
-iteraciones.place(relx=0.7,rely=0.65,anchor=tkinter.CENTER)
+iteraciones.place(relx=0.7,rely=0.50,anchor=tkinter.CENTER)
+
+ultimas =  customtkinter.CTkEntry(inputs_frame,width=100,height=40,text_color="red")
+ultimas.place(relx=0.7,rely=0.65,anchor=tkinter.CENTER)
 
 #Demanda
-pd0 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
-pd0.place(relx=0.4,rely=0.31,anchor=tkinter.CENTER)
-pd10 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
-pd10.place(relx=0.5,rely=0.31,anchor=tkinter.CENTER)
-pd20 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
-pd20.place(relx=0.6,rely=0.31,anchor=tkinter.CENTER)
-pd30 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
-pd30.place(relx=0.7,rely=0.31,anchor=tkinter.CENTER)
-pd40 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
-pd40.place(relx=0.8,rely=0.31,anchor=tkinter.CENTER)
-pd50 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
-pd50.place(relx=0.9,rely=0.31,anchor=tkinter.CENTER)
+ppd0 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
+ppd0.place(relx=0.4,rely=0.31,anchor=tkinter.CENTER)
+ppd10 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
+ppd10.place(relx=0.5,rely=0.31,anchor=tkinter.CENTER)
+ppd20 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
+ppd20.place(relx=0.6,rely=0.31,anchor=tkinter.CENTER)
+ppd30 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
+ppd30.place(relx=0.7,rely=0.31,anchor=tkinter.CENTER)
+ppd40 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
+ppd40.place(relx=0.8,rely=0.31,anchor=tkinter.CENTER)
+ppd50 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
+ppd50.place(relx=0.9,rely=0.31,anchor=tkinter.CENTER)
 
 #Demora
-dp1 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
-dp1.place(relx=0.4,rely=0.47,anchor=tkinter.CENTER)
-dp2= customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
-dp2.place(relx=0.5,rely=0.47,anchor=tkinter.CENTER)
-dp3 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
-dp3.place(relx=0.6,rely=0.47,anchor=tkinter.CENTER)
-dp4 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
-dp4.place(relx=0.7,rely=0.47,anchor=tkinter.CENTER)
+ddp1 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
+ddp1.place(relx=0.4,rely=0.47,anchor=tkinter.CENTER)
+ddp2= customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
+ddp2.place(relx=0.5,rely=0.47,anchor=tkinter.CENTER)
+ddp3 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
+ddp3.place(relx=0.6,rely=0.47,anchor=tkinter.CENTER)
+ddp4 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
+ddp4.place(relx=0.7,rely=0.47,anchor=tkinter.CENTER)
 
 #Decenas pedidas
-cp1 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
-cp1.place(relx=0.4,rely=0.67,anchor=tkinter.CENTER)
-cp2= customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
-cp2.place(relx=0.5,rely=0.67,anchor=tkinter.CENTER)
-cp3 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
-cp3.place(relx=0.6,rely=0.67,anchor=tkinter.CENTER)
+ccp1 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
+ccp1.place(relx=0.4,rely=0.67,anchor=tkinter.CENTER)
+ccp2= customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
+ccp2.place(relx=0.5,rely=0.67,anchor=tkinter.CENTER)
+ccp3 = customtkinter.CTkEntry(app,width=100,height=20,text_color="red")
+ccp3.place(relx=0.6,rely=0.67,anchor=tkinter.CENTER)
 
 #Plan A
 pedidos = customtkinter.CTkEntry(simu_frame,text_color="red",height=35,width=100)
 pedidos.place(relx=0.5,rely=0.25,anchor=tkinter.CENTER)
 
+#Plan B
+pedidos_b = customtkinter.CTkEntry(simu_frame,text_color="red",height=35,width=100)
+pedidos_b.place(relx=0.5,rely=0.75,anchor=tkinter.CENTER)
+
 
 #Textos
-customtkinter.CTkLabel(inputs_frame, text="Tiempo").place(relx=0.18,rely=0.2,anchor=tkinter.CENTER)
-customtkinter.CTkLabel(inputs_frame, text="Q.Filas").place(relx=0.18,rely=0.35,anchor=tkinter.CENTER)
-customtkinter.CTkLabel(inputs_frame, text="Horas").place(relx=0.18,rely=0.5,anchor=tkinter.CENTER)
-customtkinter.CTkLabel(inputs_frame, text="Iteraciones").place(relx=0.18,rely=0.65,anchor=tkinter.CENTER)
+customtkinter.CTkLabel(inputs_frame, text="Desde").place(relx=0.18,rely=0.2,anchor=tkinter.CENTER)
+customtkinter.CTkLabel(inputs_frame, text="Hasta").place(relx=0.18,rely=0.35,anchor=tkinter.CENTER)
+customtkinter.CTkLabel(inputs_frame, text="Iteraciones").place(relx=0.18,rely=0.5,anchor=tkinter.CENTER)
+customtkinter.CTkLabel(inputs_frame, text="Ultimas x").place(relx=0.18,rely=0.65,anchor=tkinter.CENTER)
 
 customtkinter.CTkLabel(app,text="Probabilidades Generales",height=35,width=600).place(relx=0.5,rely=0.15,anchor=tkinter.CENTER)
 
@@ -252,15 +460,14 @@ customtkinter.CTkLabel(app,text="101 - 200",height=35,width=10).place(relx=0.5,r
 customtkinter.CTkLabel(app,text="+ 200",height=35,width=10).place(relx=0.6,rely=0.60,anchor=tkinter.CENTER)
 
 customtkinter.CTkLabel(simu_frame,text="Pedidos",height=35,width=10).place(relx=0.4,rely=0.25,anchor=tkinter.CENTER)
-
+customtkinter.CTkLabel(simu_frame,text="Pedido inicial",height=35,width=10).place(relx=0.4,rely=0.75,anchor=tkinter.CENTER)
 #Botones
-boton_borrar = customtkinter.CTkButton(inputs_frame, text="Borrar",command=borrar,height=35,width=150,fg_color="gray",text_color="black")
-boton_borrar.place(relx=0.5,rely=0.85,anchor=tkinter.CENTER)
+boton_borrar = customtkinter.CTkButton(inputs_frame, text="Borrar",command=borrar,height=40,width=150,fg_color="gray",text_color="black")
+boton_borrar.place(relx=0.5,rely=0.9,anchor=tkinter.CENTER)
 
-boton_titulo = customtkinter.CTkButton(app,text="Dos Políticas Stock",hover_color="gray",fg_color="gray",bg_color="gray",height=35,width=1200).place(relx=0.5,rely=0.05,anchor=tkinter.CENTER)
-
+boton_titulo = customtkinter.CTkButton(app,text="Dos Políticas Stock",hover_color="green",fg_color="green",bg_color="green",height=35,width=1200).place(relx=0.5,rely=0.05,anchor=tkinter.CENTER)
 boton_a = customtkinter.CTkButton(simu_frame,text="Plan A",height=35,width=100,command=politica_a).place(relx=0.3,rely=0.25,anchor=tkinter.CENTER)
-boton_b = customtkinter.CTkButton(simu_frame,text="Plan B",height=35,width=100).place(relx=0.3,rely=0.75,anchor=tkinter.CENTER)
+boton_b = customtkinter.CTkButton(simu_frame,text="Plan B",height=35,width=100, command=politica_b).place(relx=0.3,rely=0.75,anchor=tkinter.CENTER)
 
 default = customtkinter.CTkButton(app,text="Setear con valores PDF",command=default,height=35,width=100).place(relx=0.65,rely=0.15,anchor=tkinter.CENTER)
 
